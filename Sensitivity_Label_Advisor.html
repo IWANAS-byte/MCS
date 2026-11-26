@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sensitivity Label Advisor</title>
+<style>
+  *{box-sizing:border-box}
+  body{margin:0;font-family:"Segoe UI",Arial,sans-serif;background:#f3f6fb;color:#1b2430}
+  .wrap{max-width:680px;margin:0 auto;padding:20px}
+  .card{background:#fff;border-radius:16px;box-shadow:0 6px 24px rgba(15,41,77,.10);padding:24px}
+  h1{margin:0 0 4px;font-size:24px;color:#0b5cab}
+  .sub{margin:0 0 22px;color:#5b6675;font-size:14px}
+  label{display:block;font-weight:600;margin:18px 0 6px}
+  select{width:100%;padding:12px;font-size:16px;border:2px solid #d5deec;border-radius:10px;background:#fff}
+  select:focus{outline:none;border-color:#0b5cab}
+  .hidden{display:none}
+  .result{margin-top:24px;padding:18px;border-radius:12px;background:#eef5ff;border-left:6px solid #0b5cab}
+  .result.warn{background:#fff6e5;border-color:#e08a00}
+  .result .tag{font-size:12px;font-weight:600;text-transform:uppercase;color:#5b6675}
+  .result .name{font-size:26px;font-weight:700;margin:4px 0 10px}
+  .row{margin:8px 0;font-size:15px}
+  .row b{display:inline-block;min-width:110px}
+  button{margin-top:18px;background:none;border:none;color:#0b5cab;font-weight:600;cursor:pointer;font-size:14px;text-decoration:underline}
+</style>
+</head>
+<body>
+<div class="wrap"><div class="card">
+  <h1>Sensitivity Label Advisor</h1>
+  <p class="sub">Answer up to three questions to find the right label.</p>
+
+  <label for="type">1. What do you want to protect?</label>
+  <select id="type">
+    <option value="">Select...</option>
+    <option>File</option>
+    <option>Email</option>
+  </select>
+
+  <div id="q2" class="hidden">
+    <label for="scope">2. Who should have access?</label>
+    <select id="scope"></select>
+  </div>
+
+  <div id="q3" class="hidden">
+    <label for="access">3. What access is required?</label>
+    <select id="access">
+      <option value="">Select...</option>
+      <option>View only</option>
+      <option>Collaborate</option>
+      <option>Selected users only</option>
+    </select>
+  </div>
+
+  <div id="result" class="result hidden" aria-live="polite"></div>
+  <button id="reset" class="hidden" type="button">Start again</button>
+</div></div>
+
+<script>
+const LABELS = {
+  "Internal|View only": {name:"Internal Public", file:"View only. No edit, print or copy.", email:"Not available for email.", note:"For information every company user may read but not change. External access is blocked. Re-authentication after 5 days offline."},
+  "Internal|Collaborate": {name:"Internal General", file:"View, edit, print and copy.", email:"Reply, Reply All and forward internally.", note:"For day-to-day collaboration inside the company. External access is blocked. Re-authentication after 5 days offline."},
+  "Internal|Selected users only": {name:"Internal Confidential", file:"The file owner chooses the authorized users and their permissions.", email:"Reply and Reply All allowed; Do Not Forward.", note:"For confidential internal information limited to specific people."},
+  "External|View only": {name:"External Public", file:"Authenticated external users: view only.", email:"Not available for email.", note:"For approved external sharing where recipients should only read. Re-authentication after 2 days offline."},
+  "External|Collaborate": {name:"External General", file:"View, edit, print and copy.", email:"Reply, Reply All and forward allowed.", note:"For approved collaboration with authenticated external users. Re-authentication after 31 days offline."},
+  "External|Selected users only": {name:"External Confidential", file:"The file owner chooses the authorized external users and their permissions.", email:"Reply and Reply All allowed; Do Not Forward.", note:"For confidential information shared only with selected external users."}
+};
+
+const $ = id => document.getElementById(id);
+const type=$("type"), scope=$("scope"), access=$("access"), q2=$("q2"), q3=$("q3"), res=$("result"), reset=$("reset");
+
+function fillScope(){
+  const opts = type.value==="File" ? ["Only me","Internal","External"] : ["Internal","External"];
+  scope.innerHTML = '<option value="">Select...</option>' + opts.map(o=>`<option>${o}</option>`).join("");
+}
+function show(html, warn){
+  res.className = "result" + (warn ? " warn" : "");
+  res.innerHTML = html;
+  res.classList.remove("hidden");
+  reset.classList.remove("hidden");
+}
+function evaluate(){
+  res.classList.add("hidden");
+  if(!type.value || !scope.value){ return; }
+  if(scope.value==="Only me"){
+    q3.classList.add("hidden");
+    show('<div class="tag">Result</div><div class="name">Private / Only me</div><div class="row">No standard sensitivity label makes the person applying it the only authorized user. Keep the file in OneDrive without sharing, or contact IT.</div>', true);
+    return;
+  }
+  q3.classList.remove("hidden");
+  if(!access.value){ return; }
+  if(type.value==="Email" && access.value==="View only"){
+    show('<div class="tag">No matching label</div><div class="name">Not available for email</div><div class="row">Internal Public and External Public are not configured for email. Choose Collaborate or Selected users only, or contact IT.</div>', true);
+    return;
+  }
+  const r = LABELS[scope.value+"|"+access.value];
+  show(`<div class="tag">Recommended label</div><div class="name">${r.name}</div>
+        <div class="row">${r.note}</div>
+        <div class="row"><b>File:</b> ${r.file}</div>
+        <div class="row"><b>Email:</b> ${r.email}</div>
+        <div class="row"><b>How to apply:</b> Home &gt; Sensitivity &gt; ${scope.value} &gt; ${r.name.split(" ").slice(1).join(" ")}</div>`, false);
+}
+
+type.addEventListener("change",()=>{
+  access.value=""; res.classList.add("hidden"); q3.classList.add("hidden");
+  if(!type.value){ q2.classList.add("hidden"); reset.classList.add("hidden"); return; }
+  fillScope(); q2.classList.remove("hidden"); reset.classList.add("hidden");
+});
+scope.addEventListener("change",()=>{ access.value=""; evaluate(); });
+access.addEventListener("change", evaluate);
+reset.addEventListener("click",()=>{
+  type.value=""; access.value=""; q2.classList.add("hidden"); q3.classList.add("hidden");
+  res.classList.add("hidden"); reset.classList.add("hidden");
+});
+</script>
+</body>
+</html>
